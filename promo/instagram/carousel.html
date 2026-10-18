@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>САНБОЙ ШАМАН — карусель</title>
+<style>
+  /* Тексты сообщений «после» — настоящий результат Shamanizer (прогнаны через tools/style/sunboy.py). */
+  :root {
+    --night-top: #100e20;
+    --night-bottom: #3c1e3a;
+    --card: #2a2140;
+    --ink: #f3e9d8;
+    --ink-soft: #c2b4d4;
+    --ink-dark: #2a1a12;
+    --sun: #ffd23f;
+    --sun-edge: #ff9f1c;
+    --robe: #b8322a;
+    --step: 8px; /* ступенька пиксельного угла */
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #000; font-family: Inter, sans-serif; color: var(--ink); display: grid; gap: 40px; padding: 40px; justify-content: center; }
+
+  .slide {
+    width: 1080px; height: 1350px; padding: 104px 96px; position: relative; overflow: hidden;
+    display: flex; flex-direction: column;
+    background: linear-gradient(var(--night-top), var(--night-bottom));
+  }
+  .slide.hot { background: linear-gradient(var(--sun), var(--sun-edge)); color: var(--ink-dark); }
+
+  /* Пиксельные заголовки — Unifont, кегль кратен 16, чтобы пиксели не мылились. */
+  .pixel { font-family: Unifont, monospace; font-weight: normal; letter-spacing: 0; -webkit-font-smoothing: none; }
+  h1 { font: 112px/1.05 Unifont, monospace; }
+  h2 { font: 80px/1.1 Unifont, monospace; }
+  /* Жирное начертание: тот же текст того же цвета на пиксель шрифта правее — не тень. */
+  h1, h2, .swipe, .badge, .url { text-shadow: 0.0625em 0 currentColor; letter-spacing: 0.0625em; }
+  p { font-size: 40px; line-height: 1.35; color: var(--ink-soft); font-weight: 500; }
+  .hot p { color: var(--ink-dark); }
+  .sun { color: var(--sun); }
+
+  /* Пиксельные углы без обводок и теней. */
+  .px {
+    clip-path: polygon(
+      0 calc(var(--step) * 2), var(--step) calc(var(--step) * 2), var(--step) var(--step), calc(var(--step) * 2) var(--step), calc(var(--step) * 2) 0,
+      calc(100% - var(--step) * 2) 0, calc(100% - var(--step) * 2) var(--step), calc(100% - var(--step)) var(--step), calc(100% - var(--step)) calc(var(--step) * 2), 100% calc(var(--step) * 2),
+      100% calc(100% - var(--step) * 2), calc(100% - var(--step)) calc(100% - var(--step) * 2), calc(100% - var(--step)) calc(100% - var(--step)), calc(100% - var(--step) * 2) calc(100% - var(--step)), calc(100% - var(--step) * 2) 100%,
+      calc(var(--step) * 2) 100%, calc(var(--step) * 2) calc(100% - var(--step)), var(--step) calc(100% - var(--step)), var(--step) calc(100% - var(--step) * 2), 0 calc(100% - var(--step) * 2)
+    );
+  }
+  .sprite { image-rendering: pixelated; display: block; }
+
+  .swipe { margin-top: auto; font: 48px Unifont, monospace; display: flex; justify-content: center; color: var(--sun); }
+
+  .label { font: 700 30px Inter; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-soft); }
+
+  /* Поле ввода и сообщения */
+  .field { display: flex; align-items: center; gap: 20px; padding: 28px 28px 28px 40px; background: var(--card); font: 500 40px Inter; }
+  .field .caret { width: 4px; height: 48px; background: var(--sun); margin-left: -14px; }
+  .field .send { margin-left: auto; flex: none; width: 76px; height: 76px; background: var(--sun); display: grid; place-items: center; --step: 6px; }
+  .key { display: inline-flex; align-items: center; justify-content: center; height: 110px; padding: 0 44px; background: var(--card); font: 700 44px Inter; }
+  .arrow-down { width: 0; height: 0; border-left: 36px solid transparent; border-right: 36px solid transparent; border-top: 44px solid var(--sun); }
+
+  .chat { display: flex; flex-direction: column; gap: 22px; }
+  .bubble {
+    align-self: flex-start; max-width: 82%; padding: 22px 32px; background: var(--card);
+    font: 500 36px/1.3 Inter; overflow-wrap: anywhere;
+  }
+  .bubble.me { align-self: flex-end; background: var(--sun); color: var(--ink-dark); font-weight: 600; }
+  .bubble small { display: block; font: 600 26px Inter; color: var(--ink-soft); margin-bottom: 6px; }
+
+  /* Списки */
+  .list { display: flex; flex-direction: column; gap: 24px; margin-top: 56px; }
+  .row { display: flex; align-items: center; gap: 32px; padding: 28px 36px; background: var(--card); font: 600 40px/1.25 Inter; }
+  .row .badge { flex: none; width: 112px; height: 112px; display: grid; place-items: center; font: 48px Unifont, monospace; background: var(--sun); color: var(--ink-dark); --step: 6px; }
+  .row span { color: var(--ink-soft); font-weight: 500; display: block; font-size: 32px; margin-top: 6px; overflow-wrap: anywhere; }
+
+  .tags { display: flex; flex-wrap: wrap; gap: 16px; }
+  .tags span { padding: 14px 24px; background: var(--card); font: 700 30px Inter; --step: 6px; }
+
+  .url { margin-top: 40px; padding: 32px 36px; background: var(--ink-dark); color: var(--sun); font: 48px Unifont, monospace; overflow-wrap: anywhere; }
+
+  /* Искры с бубна: квадраты по пиксельной сетке спрайта */
+  .spark { position: absolute; background: var(--sun); }
+  .spark.o { background: var(--sun-edge); }
+  .spark.w { background: #fff; }
+</style>
+</head>
+<body>
+
+<!-- 1. Обложка -->
+<section class="slide">
+  <img class="px" src="assets/icon.png" alt="" style="width:560px; margin:24px auto 0; display:block; --step:16px">
+  <h1 class="sun" style="text-align:center; margin-top:72px">САНБОЙ ШАМАН</h1>
+  <p style="text-align:center; margin-top:32px; color:var(--ink); font-weight:600">Приложение для&nbsp;Mac, которое пишет твои сообщения как&nbsp;Пророк Санбой</p>
+  <div class="swipe">листай →</div>
+</section>
+
+<!-- 2. Как работает -->
+<section class="slide">
+  <h2>Пишешь как&nbsp;обычно.<br>Жмёшь <span class="sun">Enter</span>.</h2>
+  <div style="margin-top:72px; display:flex; flex-direction:column; gap:40px">
+    <div class="label">Ты набрал</div>
+    <div class="field px">Завтра в&nbsp;семь встречаемся?<i class="caret"></i>
+      <span class="send px"><svg width="36" height="36" viewBox="0 0 24 24" fill="#2a1a12"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg></span>
+    </div>
+    <div style="display:flex; align-items:center; gap:36px; margin:8px 0 0 8px">
+      <span class="key px">Enter ⏎</span><div class="arrow-down"></div>
+    </div>
+    <div class="label">Ушло в&nbsp;чат</div>
+    <div class="chat"><div class="bubble me px" style="align-self:flex-start; max-width:100%; font-size:42px">Эавтра,,,,в СЕМЬВСТРЕЧАЕМСЯ ?...</div></div>
+  </div>
+  <p style="margin-top:auto">Капс, нули, точки и&nbsp;запятые встают сами. Как&nbsp;у&nbsp;самого Санбоя.</p>
+</section>
+
+<!-- 3. Шаман -->
+<section class="slide">
+  <h2>Пока печатаешь, над&nbsp;строкой колдует <span class="sun">шаман</span></h2>
+  <div style="position:relative; margin-top:auto; height:560px">
+    <img class="sprite" src="assets/shaman-hit.png" alt="" style="position:absolute; left:120px; top:0; width:420px">
+    <!-- искры летят с бубна на текст -->
+    <i class="spark" style="left:560px; top:300px; width:28px; height:28px"></i>
+    <i class="spark o" style="left:630px; top:250px; width:14px; height:14px"></i>
+    <i class="spark w" style="left:690px; top:330px; width:14px; height:14px"></i>
+    <i class="spark" style="left:740px; top:290px; width:28px; height:28px"></i>
+    <i class="spark o" style="left:800px; top:380px; width:14px; height:14px"></i>
+    <i class="spark w" style="left:600px; top:400px; width:14px; height:14px"></i>
+    <i class="spark" style="left:690px; top:440px; width:14px; height:14px"></i>
+    <div class="field px" style="position:absolute; left:0; right:0; bottom:0">П0ка.. печатаешь,,,ШАМАН ....К0ЛДУЭТ<i class="caret"></i></div>
+  </div>
+  <p style="margin-top:56px">Бьёт в&nbsp;бубен на&nbsp;каждую букву, а&nbsp;при&nbsp;отправке подпрыгивает и&nbsp;сыплет искрами.</p>
+</section>
+
+<!-- 4. Переписка -->
+<section class="slide">
+  <h2>Работает в&nbsp;<span class="sun">Telegram</span> и&nbsp;не&nbsp;только</h2>
+  <div class="chat" style="margin-top:64px; gap:16px">
+    <div class="bubble px"><small>Начальник</small>Где отчёт?</div>
+    <div class="bubble me px">Будэт.. К ВЕЧЕРУ,,,,ЩАС.. Д0ДЭЛЫВАЮ........</div>
+    <div class="bubble px"><small>Мама</small>Ты поел?</div>
+    <div class="bubble me px">Да,,мам,,всё...........хараш0</div>
+    <div class="bubble px"><small>Бывшая</small>Нам надо поговорить</div>
+    <div class="bubble me px">Ничо.....нэ,,,НАД0,,,,, У,,,,МИНЯ....ВСЁ НОРМАЛЬНО,,НОРМАЛЬНО</div>
+  </div>
+</section>
+
+<!-- 5. Что творит с текстом -->
+<section class="slide">
+  <h2>Что шаман творит с&nbsp;текстом</h2>
+  <div class="list">
+    <div class="row px"><span class="badge px">ААА</span><div>Капс длинными кусками<span>МНЕ НАДО НАСТОЯЩИЕ ДРУЗЬЯ</span></div></div>
+    <div class="row px"><span class="badge px">0</span><div>Буквы как&nbsp;на&nbsp;сайте Санбоя<span>П0М0ЖЭШЬ, 0РХАНИЭУЭТ</span></div></div>
+    <div class="row px"><span class="badge px">шо</span><div>Словечки<span>шо, щас, тока, ваще, тибя</span></div></div>
+    <div class="row px"><span class="badge px">,,,</span><div>Точки и&nbsp;запятые пачками<span>ответь сразу.НЕ&nbsp;ОТВЕТИШЬ ?....</span></div></div>
+    <div class="row px"><span class="badge px">://</span><div>Ссылки не&nbsp;трогает<span>чтобы открывались</span></div></div>
+  </div>
+</section>
+
+<!-- 6. Установка -->
+<section class="slide">
+  <h2>Ставится за&nbsp;минуту</h2>
+  <div class="list">
+    <div class="row px"><span class="badge px">1</span><div>Скачай SunboyShaman.dmg</div></div>
+    <div class="row px"><span class="badge px">2</span><div>Перетащи шамана в&nbsp;Applications</div></div>
+    <div class="row px"><span class="badge px">3</span><div>Разреши «Универсальный доступ»<span>без него Mac не&nbsp;даёт увидеть нажатие Enter</span></div></div>
+  </div>
+  <img class="sprite" src="assets/shaman-up.png" alt="" style="width:240px; margin:auto auto 0">
+  <div class="tags" style="margin-top:56px; justify-content:center"><span class="px">бесплатно</span><span class="px">Apple Silicon</span><span class="px">macOS 13+</span></div>
+</section>
+
+<!-- 7. Финал -->
+<section class="slide hot" style="justify-content:center">
+  <h1 style="font-size:128px; overflow-wrap:anywhere">Скачиваи,,,,ШАМАНА!!</h1>
+  <p style="font-weight:600; font-size:44px; margin-top:56px">Ссылка на&nbsp;скачивание в&nbsp;описании</p>
+  <div class="url px">github.com/cybertatar/<wbr>sunnyshamanlang</div>
+</section>
+
+</body>
+</html>

@@ -1,0 +1,55 @@
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Swift
+        run: swift --version
+
+      - name: Тесты
+        run: swift test
+
+      - name: Сборка приложения и установщика
+        env:
+          VERSION: 0.1.0
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: scripts/build-app.sh
+
+      - name: Артефакт
+        uses: actions/upload-artifact@v4
+        with:
+          name: SunboyShaman
+          path: |
+            dist/SunboyShaman.zip
+            dist/SunboyShaman.dmg
+
+      # Сборка из main — релиз «latest», на него ведут README и install.sh.
+      # Сборка из рабочей ветки — «nightly», для проверки до слияния.
+      - name: Релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            TAG=latest
+            TITLE="САНБОЙ ШАМАН"
+          else
+            TAG=nightly
+            TITLE="САНБОЙ ШАМАН — свежая сборка из ветки"
+          fi
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          gh release create "$TAG" dist/SunboyShaman.zip dist/SunboyShaman.dmg \
+            $([ "$TAG" = nightly ] && echo --prerelease) \
+            --target "$GITHUB_SHA" \
+            --title "$TITLE" \
+            --notes "Как установить — в README: https://github.com/cybertatar/sunnyshamanlang#установка
+          Сборка ${GITHUB_RUN_NUMBER}, ветка ${GITHUB_REF_NAME} (${GITHUB_SHA::7})."
